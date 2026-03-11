@@ -1,3 +1,4 @@
+# Anilist Recommendation Algorithm
 ## 📦 Data Access
 
 ### Raw Data (JSON files)
@@ -7,3 +8,15 @@ The complete raw dataset (75 users, 61,693 entries, 217MB) is available on Googl
 After downloading, place the zip file in your project folder and extract:
 ```bash
 unzip raw_data_backup.zip
+```
+
+### Goal:
+Making a recommendation algorithm that takes a user's lists and outputs recommendations, predictions of what they will watch next, etc.
+
+### Features: 
+- Uses GNN
+- Uses Seq Model
+- Makes cool graph visualization (eventually)
+
+### Write-up:
+[[google docs link goes here eventually]]
