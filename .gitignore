@@ -31,3 +31,4 @@ conda-env/
 # Logs
 *.log
 logs/
+raw_data/
