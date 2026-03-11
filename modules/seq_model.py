@@ -1,4 +1,5 @@
 '''
+Write the sequence model here.
 Input:
 
     Watch Sequences: A list of mediaId sequences for a specific user.

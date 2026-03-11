@@ -1,4 +1,5 @@
 '''
+Write the GNN model here.
 Input:
 
     Node Features: A PyTorch tensor (from the Data Scientist) representing anime metadata (genres, tags, etc.).

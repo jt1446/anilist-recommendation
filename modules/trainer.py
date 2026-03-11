@@ -1,4 +1,6 @@
-'''Inputs: gnn_model, seq_model, processed_data
+'''
+Write the training loop here to optimize both the GNN and sequence models jointly.
+Inputs: gnn_model, seq_model, processed_data
 
 Outputs: trained_weights.pth, loss_history.csv
 
