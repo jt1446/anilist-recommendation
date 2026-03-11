@@ -1,3 +1,6 @@
+'''
+Grabs data from Anilist api. Sticks to clean temporal data (no 0 timestamps), and more than 30 completed entries. saves a raw json.
+'''
 import requests
 import json
 import time

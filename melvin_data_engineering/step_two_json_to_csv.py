@@ -1,3 +1,7 @@
+'''
+turns raw json from step one into two csvs: interactions and metadata. Uses a separator for genres and tags to handle 
+the many-to-many relationship in a single table, but this is just a simplification for this project.
+'''
 import json
 import csv
 
