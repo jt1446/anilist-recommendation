@@ -1,0 +1,15 @@
+{
+  "collection_date": "2026-03-11T13:07:32.419493",
+  "total_users": 75,
+  "total_entries": 61693,
+  "avg_entries_per_user": 822.5733333333334,
+  "unique_anime": 8005,
+  "total_interactions": 61693,
+  "rnn_sequences": 74,
+  "rnn_total_entries": 42734,
+  "files_generated": {
+    "gnn_interactions": "for_gnn/user_anime_interactions.csv",
+    "gnn_metadata": "for_gnn/anime_metadata.csv",
+    "rnn_sequences": "for_rnn/watch_sequences.csv"
+  }
+}

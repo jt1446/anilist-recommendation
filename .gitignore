@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+*.ipynb_checkpoints
+
+# Mac
+.DS_Store
+*.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+venv/
+env/
+ENV/
+.env
+.venv
+conda-env/
+
+# Logs
+*.log
+logs/
