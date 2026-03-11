@@ -13,6 +13,32 @@ unzip raw_data_backup.zip
 ### Goal:
 Making a recommendation algorithm that takes a user's lists and outputs recommendations, predictions of what they will watch next, etc.
 
+### Todos:
+- [ ] data engineering
+    - [x] get data
+    - [ ] convert into vectors
+    - [ ] make tensors
+    - [ ] produce fully cleaned data that can be imported
+
+- [ ] loss/integration
+    - [ ] BPR Loss
+    - [ ] evaluation script
+    - [ ] training loop script
+
+- [ ] gnn
+    - [ ] build the graph
+    - [ ] create gnn layer
+    - [ ] write function to return latent vector for any anime
+- [ ] seq model
+    - build rnn/attention layer with the input being a sequence of 128 dimension embeds from gnn
+    - output is probability distribution of all anime (next recommendation)
+
+- [ ] visualization
+    - [ ] build streamlit interface
+    - [ ] implement graph viz with PyVis
+    - [ ] take the output of the GNN embeddings and create an interactive "Galaxy" of anime where users can click to see clusters
+    - [ ] Visualize the "Loss Convergence" curve by reading the training logs
+
 ### Features: 
 - Uses GNN
 - Uses Seq Model
