@@ -14,6 +14,7 @@ unzip raw_data_backup.zip
 Making a recommendation algorithm that takes a user's lists and outputs recommendations, predictions of what they will watch next, etc.
 
 ### Todos:
+- [ ] write util functions
 - [ ] data engineering
     - [x] get data
     - [ ] convert into vectors
