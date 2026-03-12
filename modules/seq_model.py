@@ -1,5 +1,5 @@
 '''
-Write the sequence model here.
+Write the sequence model as a notebook in google colab, then download as a .py and put it here.
 Input:
 
     Watch Sequences: A list of mediaId sequences for a specific user.
