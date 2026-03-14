@@ -1,6 +1,7 @@
 '''
 Write the GNN model as a notebook in google colab, then download as a .py and put it here.
 Make sure to use the functions found in utils.py for loading data, mapping ids, etc.
+
 Input:
 
     Node Features: A PyTorch tensor (from the Data Scientist) representing anime metadata (genres, tags, etc.).
