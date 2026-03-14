@@ -79,4 +79,115 @@ def map_ids_to_indices(dataframe, id_column='mediaId'):
     mapped_series = dataframe[id_column].map(id_to_idx)
     
     return mapped_series, id_to_idx, idx_to_id
+def reverse_lookup(index, mapping):
+    """
+    Returns the original ID for a given index using the provided mapping.
+    
+    Args:
+        index (int): The index to look up.
+        mapping (dict): The dictionary mapping indices to IDs.
+        
+    Returns:
+        The original ID associated with the index.
+    """
+    return mapping.get(index)
 
+def to_edge_index(interactions_df, user_col='userId', item_col='mediaId'):
+    """
+    Converts interactions DataFrame into an edge index tensor [2, E].
+    
+    Args:
+        interactions_df (pd.DataFrame): DataFrame containing interaction indices.
+        user_col (str): The column name for user indices.
+        item_col (str): The column name for item indices.
+        
+    Returns:
+        torch.Tensor: Edge index tensor of shape [2, E].
+    """
+    user_indices = interactions_df[user_col].values
+    item_indices = interactions_df[item_col].values
+    
+    edge_index = torch.stack([
+        torch.tensor(user_indices, dtype=torch.long),
+        torch.tensor(item_indices, dtype=torch.long)
+    ], dim=0)
+    
+    return edge_index
+
+def pad_sequences(sequences, max_len, padding_value=0):
+    """
+    Pads or truncates sequences to a fixed maximum length.
+    
+    Args:
+        sequences (list of lists): Raw list of watch histories.
+        max_len (int): The target sequence length.
+        padding_value (int): The value to use for mapping (default 0).
+        
+    Returns:
+        torch.Tensor: Padded tensor of shape [num_sequences, max_len].
+    """
+    padded_results = []
+    
+    for seq in sequences:
+        if len(seq) > max_len:
+            # Truncate
+            padded_results.append(seq[-max_len:])
+        else:
+            # Pad
+            padded_results.append([padding_value] * (max_len - len(seq)) + seq)
+            
+    return torch.tensor(padded_results, dtype=torch.long)
+
+def save_checkpoint(model, optimizer, epoch, path):
+    """
+    Saves a model checkpoint.
+    
+    Args:
+        model (torch.nn.Module): The model to save.
+        optimizer (torch.optim.Optimizer): The optimizer to save.
+        epoch (int): The current training epoch.
+        path (str): The path to save the checkpoint file to.
+    """
+    checkpoint = {
+        'epoch': epoch,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict()
+    }
+    torch.save(checkpoint, path)
+    print(f"Checkpoint saved to {path} at epoch {epoch}")
+
+def load_checkpoint(path, model, optimizer=None):
+    """
+    Loads a model checkpoint.
+    
+    Args:
+        path (str): Path to the checkpoint file.
+        model (torch.nn.Module): The model to load weights into.
+        optimizer (torch.optim.Optimizer, optional): The optimizer to load weights into.
+        
+    Returns:
+        int: The epoch the checkpoint was saved at.
+    """
+    checkpoint = torch.load(path)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    if optimizer and 'optimizer_state_dict' in checkpoint:
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    return checkpoint.get('epoch', 0)
+
+def log_metrics(metrics_dict, epoch, log_path='training_log.csv'):
+    """
+    Appends training metrics to a CSV file.
+    
+    Args:
+        metrics_dict (dict): Dictionary of metrics (e.g., {'loss': 0.5, 'hit_rate': 0.8}).
+        epoch (int): The current training epoch.
+        log_path (str): Path to the CSV log file.
+    """
+    row_data = {'epoch': epoch, **metrics_dict}
+    df = pd.DataFrame([row_data])
+    
+    # If file doesn't exist, write it with headers, else append without headers
+    if not os.path.exists(log_path):
+        df.to_csv(log_path, index=False)
+    else:
+        df.to_csv(log_path, mode='a', header=False, index=False)
