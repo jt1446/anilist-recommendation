@@ -302,14 +302,14 @@ def evaluate_hit_rate(gnn, seq_model, test_loader, x, edge_index, device, k=10):
     Args:
         gnn: GNN model
         seq_model: Sequential RNN model
-        test_loader: DataLoader for test sequences
-        x: Node features
-        edge_index: Edge index
+        test_loader: DataLoader for testing
+        x: Node features for GNN
+        edge_index: Edge index for GNN
         device: Compute device
-        k: Top-k for hit rate calculation
-    
+        k: Top-K value (default 10)
+        
     Returns:
-        hit_rate: Percentage of correct predictions in top-k
+        float: Hit rate value as a percentage.
     """
     gnn.eval()
     seq_model.eval()
@@ -318,6 +318,7 @@ def evaluate_hit_rate(gnn, seq_model, test_loader, x, edge_index, device, k=10):
     total = 0
     
     with torch.no_grad():
+        # Get latest item embeddings
         item_embeddings = gnn(x, edge_index)
         seq_model.embedding.weight.data[1:] = item_embeddings
         
@@ -325,19 +326,105 @@ def evaluate_hit_rate(gnn, seq_model, test_loader, x, edge_index, device, k=10):
             batch_seqs = batch_seqs.to(device)
             batch_labels = batch_labels.to(device)
             
-            logits = seq_model(batch_seqs)  # [batch, num_items]
+            logits = seq_model(batch_seqs)
             
-            # Get top-k predictions
-            _, top_k_pred = torch.topk(logits, k=min(k, logits.size(1)), dim=1)
+            # Get top K indices
+            _, top_k_indices = torch.topk(logits, k, dim=1)
             
-            # Check if true label is in top-k
-            for i in range(len(batch_labels)):
-                if batch_labels[i] in top_k_pred[i]:
-                    hits += 1
-                total += 1
+            # Count hits
+            hits += (top_k_indices == batch_labels.unsqueeze(1)).any(dim=1).sum().item()
+            total += batch_labels.size(0)
+            
+    return (hits / total) * 100 if total > 0 else 0
+
+
+def extract_embeddings(model_class, model_path, num_items, input_dim, node_features, edge_index):
+    """
+    Extracts embeddings from a trained AnimeGNN model.
+    """
+    device = get_device()
     
-    hit_rate = (hits / total * 100) if total > 0 else 0.0
-    gnn.train()
-    seq_model.train()
+    # Initialize model
+    model = model_class(input_dim=input_dim).to(device)
     
-    return hit_rate
+    # Load weights
+    if os.path.exists(model_path):
+        # Using weights_only=False to support numpy globals saved in checkpoints
+        if torch.cuda.is_available():
+            checkpoint = torch.load(model_path, weights_only=False)
+        else:
+            checkpoint = torch.load(model_path, map_location=torch.device('cpu'), weights_only=False)
+        
+        # Check if config is in checkpoint to handle size mismatches
+        if 'gnn_config' in checkpoint:
+            input_dim = checkpoint['gnn_config'].get('input_dim', input_dim)
+            # Re-initialize model with correct dimensions from checkpoint
+            model = model_class(input_dim=input_dim).to(device)
+
+        # The checkpoint might be the full state_dict or just the model weights
+        if 'gnn_state_dict' in checkpoint:
+            model.load_state_dict(checkpoint['gnn_state_dict'], strict=False)
+        elif 'model_state_dict' in checkpoint:
+            model.load_state_dict(checkpoint['model_state_dict'], strict=False)
+        else:
+            model.load_state_dict(checkpoint, strict=False)
+    else:
+        print(f"Warning: model_path {model_path} not found. Returning randomly initialized embeddings.")
+
+    model.eval()
+    with torch.no_grad():
+        # Ensure node_features and edge_index are on the same device as the model
+        embeddings = model(node_features.to(device), edge_index.to(device))
+    
+    return embeddings.cpu().numpy()
+
+
+def create_latent_space_map(embeddings, metadata_df):
+    """
+    Creates an interactive latent space visualization using UMAP and Plotly.
+    """
+    import plotly.express as px
+    import umap
+    
+    # Ensure metadata has columns for tooltips
+    possible_tooltip_cols = ['title', 'genres', 'averageScore', 'episodes', 'meanScore', 'popularity']
+    tooltip_cols = [col for col in possible_tooltip_cols if col in metadata_df.columns]
+    
+    print(f"Performing UMAP dimensionality reduction on {embeddings.shape}...")
+    reducer = umap.UMAP(n_neighbors=15, min_dist=0.1, n_components=2, random_state=42)
+    umap_embeddings = reducer.fit_transform(embeddings)
+    
+    # Create a DataFrame for plotting
+    plot_df = pd.DataFrame(umap_embeddings, columns=['umap_1', 'umap_2'])
+    
+    # Merge with metadata
+    # The order of embeddings must match the order of items in metadata_df
+    metadata_subset = metadata_df.reset_index(drop=True)
+    plot_df = pd.concat([plot_df, metadata_subset], axis=1)
+    
+    # Color mapping column - prefer genre or score if available
+    color_col = None
+    if 'genres' in plot_df.columns and not plot_df['genres'].isna().all():
+        # First genre for coloring
+        plot_df['primary_genre'] = plot_df['genres'].apply(lambda x: x.split(',')[0] if isinstance(x, str) else (x[0] if isinstance(x, list) else 'Unknown'))
+        color_col = 'primary_genre'
+    elif 'averageScore' in plot_df.columns:
+        color_col = 'averageScore'
+    
+    # Create interactive plot
+    fig = px.scatter(
+        plot_df, 
+        x='umap_1', 
+        y='umap_2',
+        hover_data=tooltip_cols,
+        color=color_col,
+        title='Anime Latent Space Visualization (UMAP Projection)',
+        labels={'umap_1': 'Dimension 1', 'umap_2': 'Dimension 2'},
+        template='plotly_dark'
+    )
+    
+    fig.update_traces(marker=dict(size=4, opacity=0.7))
+    fig.update_layout(dragmode='pan')
+    
+    return fig
+
