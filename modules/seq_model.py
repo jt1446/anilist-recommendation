@@ -12,3 +12,62 @@ Output:
 
     Prediction Vector: A probability distribution (via a Softmax layer) across all possible mediaIds in the dataset, indicating the likelihood of each being the "next" watch.
 '''
+import tensorflow as tf
+from tensorflow.keras import layers, models
+
+def create_seq_model(num_media_ids, embedding_dim=128, rnn_units=256):
+    """
+    Creates a sequential model for predicting the next watch.
+
+    Args:
+        num_media_ids (int): The total number of unique media IDs in the dataset.
+                             This is used for the output softmax layer.
+        embedding_dim (int): The dimension of the media ID embeddings. Default is 128.
+        rnn_units (int): The number of units in the LSTM layer. Default is 256.
+
+    Returns:
+        tf.keras.Model: A compiled Keras model.
+    """
+    # Input layer for sequences of media IDs
+    # Each sequence will be a list of integers representing media IDs.
+    # The input_length should be set based on the maximum sequence length you expect.
+    # For simplicity, we'll use None here for variable-length sequences.
+    inputs = layers.Input(shape=(None,), dtype='int32', name='watch_sequence_input')
+
+    # Embedding layer: maps media IDs to dense vectors.
+    # If you have pre-computed GNN embeddings, you could load them here
+    # and set trainable=False for a frozen embedding layer.
+    # For this example, we'll use a trainable embedding layer.
+    x = layers.Embedding(
+        input_dim=num_media_ids + 1,  # +1 for a potential padding token (0) if used
+        output_dim=embedding_dim,
+        mask_zero=True,  # Important for variable-length sequences with padding
+        name='media_id_embedding'
+    )(inputs)
+
+    # LSTM layer to process the sequence
+    # Returns the last output in the output sequence, or a full sequence if return_sequences=True
+    x = layers.LSTM(rnn_units, name='lstm_layer')(x)
+
+    # Dense layer for output prediction
+    # This layer outputs a probability distribution over all possible media IDs
+    outputs = layers.Dense(num_media_ids, activation='softmax', name='next_media_id_prediction')(x)
+
+    model = models.Model(inputs=inputs, outputs=outputs, name='seq_model')
+
+    # Compile the model
+    model.compile(
+        optimizer='adam',
+        loss='sparse_categorical_crossentropy', # Use this if your labels are integer media IDs
+        metrics=['accuracy']
+    )
+
+    return model
+
+# Example usage (you'll need to replace these with your actual values):
+# num_total_media_ids = 10000  # Example: total unique media IDs in your dataset
+# embedding_dimension = 128   # As specified in your prompt
+# rnn_layer_units = 256
+
+# seq_model = create_seq_model(num_total_media_ids, embedding_dimension, rnn_layer_units)
+# seq_model.summary()
