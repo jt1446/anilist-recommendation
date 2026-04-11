@@ -227,7 +227,7 @@ class SequenceDataset(TorchDataset):
         return len(self.sequences)
     
     def __getitem__(self, idx):
-        return (torch.tensor(self.sequences[idx], dtype=torch.long),
+        return (self.sequences[idx].clone().detach().to(dtype=torch.long),
                 torch.tensor(self.labels[idx], dtype=torch.long))
 
 
@@ -338,16 +338,14 @@ def evaluate_hit_rate(gnn, seq_model, test_loader, x, edge_index, device, k=10):
     return (hits / total) * 100 if total > 0 else 0
 
 
-def extract_embeddings(model_class, model_path, num_items, input_dim, node_features, edge_index):
+def extract_embeddings(model_class, model_path, num_items, input_dim, edge_index, node_features=None):
     """
     Extracts embeddings from a trained AnimeGNN model.
     """
     device = get_device()
     
-    # Initialize model
-    model = model_class(input_dim=input_dim).to(device)
-    
     # Load weights
+    checkpoint = None
     if os.path.exists(model_path):
         # Using weights_only=False to support numpy globals saved in checkpoints
         if torch.cuda.is_available():
@@ -358,9 +356,15 @@ def extract_embeddings(model_class, model_path, num_items, input_dim, node_featu
         # Check if config is in checkpoint to handle size mismatches
         if 'gnn_config' in checkpoint:
             input_dim = checkpoint['gnn_config'].get('input_dim', input_dim)
-            # Re-initialize model with correct dimensions from checkpoint
-            model = model_class(input_dim=input_dim).to(device)
+        
+        # Use node_features from checkpoint if not provided
+        if node_features is None and 'node_features' in checkpoint:
+            node_features = checkpoint['node_features']
 
+    # Initialize model
+    model = model_class(input_dim=input_dim).to(device)
+
+    if checkpoint is not None:
         # The checkpoint might be the full state_dict or just the model weights
         if 'gnn_state_dict' in checkpoint:
             model.load_state_dict(checkpoint['gnn_state_dict'], strict=False)
@@ -369,7 +373,10 @@ def extract_embeddings(model_class, model_path, num_items, input_dim, node_featu
         else:
             model.load_state_dict(checkpoint, strict=False)
     else:
-        print(f"Warning: model_path {model_path} not found. Returning randomly initialized embeddings.")
+        print(f"Warning: model_path {model_path} not found.")
+
+    if node_features is None:
+        raise ValueError("node_features must be provided or available in checkpoint.")
 
     model.eval()
     with torch.no_grad():
@@ -391,7 +398,7 @@ def create_latent_space_map(embeddings, metadata_df):
     tooltip_cols = [col for col in possible_tooltip_cols if col in metadata_df.columns]
     
     print(f"Performing UMAP dimensionality reduction on {embeddings.shape}...")
-    reducer = umap.UMAP(n_neighbors=15, min_dist=0.1, n_components=2, random_state=42)
+    reducer = umap.UMAP(n_neighbors=50, min_dist=0.1, n_components=2, metric='cosine')
     umap_embeddings = reducer.fit_transform(embeddings)
     
     # Create a DataFrame for plotting
@@ -402,12 +409,17 @@ def create_latent_space_map(embeddings, metadata_df):
     metadata_subset = metadata_df.reset_index(drop=True)
     plot_df = pd.concat([plot_df, metadata_subset], axis=1)
     
-    # Color mapping column - prefer genre or score if available
+    # Color mapping column - use primary genre and remove full genres list from tooltips
     color_col = None
     if 'genres' in plot_df.columns and not plot_df['genres'].isna().all():
-        # First genre for coloring
+        # First genre for coloring and tooltips
         plot_df['primary_genre'] = plot_df['genres'].apply(lambda x: x.split(',')[0] if isinstance(x, str) else (x[0] if isinstance(x, list) else 'Unknown'))
         color_col = 'primary_genre'
+        # Replace 'genres' in tooltips with its simplified version if requested
+        if 'genres' in tooltip_cols:
+            tooltip_cols.remove('genres')
+            if 'primary_genre' not in tooltip_cols:
+                tooltip_cols.append('primary_genre')
     elif 'averageScore' in plot_df.columns:
         color_col = 'averageScore'
     

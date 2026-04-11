@@ -19,6 +19,8 @@ from torch_geometric.nn import GCNConv
 class AnimeGNN(torch.nn.Module):
     def __init__(self, input_dim, hidden_dim=128, output_dim=128):
         super(AnimeGNN, self).__init__()
+        # Store initial projection to ensure it's and stored/reusable
+        self.node_features = None 
         # First GCN layer: maps input features to hidden space
         self.conv1 = GCNConv(input_dim, hidden_dim)
         # Second GCN layer: produces final latent embeddings

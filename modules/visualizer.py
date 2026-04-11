@@ -37,20 +37,6 @@ if __name__ == "__main__":
         print(f"Loaded {num_items} items.")
 
         # 2. Prepare inputs
-        # For a real test, we'd need the actual node features used during training.
-        # Use gnn_config if available to set input_dim
-        input_dim = 128
-        weights_path = os.path.join(os.getcwd(), 'trained_weights.pth')
-        if os.path.exists(weights_path):
-            try:
-                ckpt = torch.load(weights_path, map_location='cpu', weights_only=False)
-                if 'gnn_config' in ckpt:
-                    input_dim = ckpt['gnn_config'].get('input_dim', input_dim)
-            except:
-                pass
-
-        node_features = torch.randn(num_items, input_dim)
-        
         # Convert interactions to edge_index for the GNN
         # Map IDs to indices (0 to num_items-1) to avoid out-of-bounds errors
         unique_ids = sorted(metadata_df['mediaId'].unique())
@@ -60,7 +46,6 @@ if __name__ == "__main__":
         item_indices = filtered_interactions['mediaId'].map(id_to_idx).values
         
         # GNN expects indices between 0 and num_items-1
-        # For simplicity in this test, we'll just use item-item edges based on sequential interactions
         edge_list = []
         for i in range(len(item_indices) - 1):
             edge_list.append([item_indices[i], item_indices[i+1]])
@@ -70,13 +55,15 @@ if __name__ == "__main__":
         else:
             edge_index = torch.zeros((2, 0), dtype=torch.long)
         
-        # 4. Extract and plot
+        # 3. Path to weights
+        weights_path = os.path.join(os.getcwd(), 'trained_weights.pth')
+        
+        # 4. Extract and plot (node_features will be loaded from checkpoint)
         embeddings = extract_embeddings(
             model_class=AnimeGNN,
             model_path=weights_path,
             num_items=num_items,
-            input_dim=input_dim,
-            node_features=node_features,
+            input_dim=128, # Default, will be overridden by checkpoint
             edge_index=edge_index
         )
         

@@ -177,9 +177,10 @@ def main():
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
     
-    # Initialize models
     print("Initializing models...")
     gnn = AnimeGNN(input_dim=input_dim, hidden_dim=128, output_dim=EMBEDDING_DIM).to(device)
+    # Store the node features used during training in the model instance
+    gnn.node_features = x
     seq_model = SeqRNNModel(num_items=num_items, embedding_dim=EMBEDDING_DIM, 
                             rnn_units=RNN_UNITS).to(device)
     
@@ -226,6 +227,7 @@ def main():
         'seq_model_state_dict': seq_model.state_dict(),
         'gnn_config': {'input_dim': input_dim, 'output_dim': EMBEDDING_DIM},
         'seq_config': {'num_items': num_items, 'embedding_dim': EMBEDDING_DIM},
+        'node_features': gnn.node_features.to('cpu'), # Store actual features
         'media_id_mapping': media_id_to_idx
     }, 'trained_weights.pth')
     
