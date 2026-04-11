@@ -413,7 +413,10 @@ def create_latent_space_map(embeddings, metadata_df):
     color_col = None
     if 'genres' in plot_df.columns and not plot_df['genres'].isna().all():
         # First genre for coloring and tooltips
-        plot_df['primary_genre'] = plot_df['genres'].apply(lambda x: x.split(',')[0] if isinstance(x, str) else (x[0] if isinstance(x, list) else 'Unknown'))
+        plot_df['primary_genre'] = plot_df['genres'].apply(
+            lambda x: x.replace('[', '').replace(']', '').replace("'", "").split(',')[0].strip() 
+            if isinstance(x, str) else (x[0] if isinstance(x, list) and len(x) > 0 else 'Unknown')
+        )
         color_col = 'primary_genre'
         # Replace 'genres' in tooltips with its simplified version if requested
         if 'genres' in tooltip_cols:
