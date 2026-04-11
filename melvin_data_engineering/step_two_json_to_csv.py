@@ -27,12 +27,15 @@ def process_anilist_to_normalized_tables(input_json, interactions_file, metadata
 
         # 2. Prepare Metadata (only if not already added)
         if media_id not in unique_anime:
+            genres_list = media_info.get('genres', [])
+            primary_genre = genres_list[0] if genres_list else 'Unknown'
             # We still use a separator, but only in the metadata table
             # Alternatively, you could create a THIRD table for a true many-to-many
             unique_anime[media_id] = {
                 'mediaId': media_id,
                 'title': media_info['title'].get('romaji'),
-                'genres': "|".join(media_info.get('genres', [])),
+                'primary_genre': primary_genre,
+                'genres': "|".join(genres_list),
                 'popularity': media_info.get('popularity'),
                 'meanScore': media_info.get('meanScore'),
                 # Extracting top 3 tags for concise features
@@ -47,7 +50,7 @@ def process_anilist_to_normalized_tables(input_json, interactions_file, metadata
 
     # Write Metadata Table
     with open(metadata_file, 'w', newline='', encoding='utf-8') as f:
-        writer = csv.DictWriter(f, fieldnames=['mediaId', 'title', 'genres', 'popularity', 'meanScore', 'top_tags'])
+        writer = csv.DictWriter(f, fieldnames=['mediaId', 'title', 'primary_genre', 'genres', 'popularity', 'meanScore', 'top_tags'])
         writer.writeheader()
         writer.writerows(unique_anime.values())
 

@@ -411,18 +411,23 @@ def create_latent_space_map(embeddings, metadata_df):
     
     # Color mapping column - use primary genre and remove full genres list from tooltips
     color_col = None
-    if 'genres' in plot_df.columns and not plot_df['genres'].isna().all():
-        # First genre for coloring and tooltips
-        plot_df['primary_genre'] = plot_df['genres'].apply(
-            lambda x: x.replace('[', '').replace(']', '').replace("'", "").split(',')[0].strip() 
-            if isinstance(x, str) else (x[0] if isinstance(x, list) and len(x) > 0 else 'Unknown')
-        )
+    if 'primary_genre' in plot_df.columns:
         color_col = 'primary_genre'
-        # Replace 'genres' in tooltips with its simplified version if requested
         if 'genres' in tooltip_cols:
             tooltip_cols.remove('genres')
-            if 'primary_genre' not in tooltip_cols:
-                tooltip_cols.append('primary_genre')
+        if 'primary_genre' not in tooltip_cols:
+            tooltip_cols.append('primary_genre')
+    elif 'genres' in plot_df.columns and not plot_df['genres'].isna().all():
+        # Fallback if primary_genre not in CSV
+        plot_df['primary_genre'] = plot_df['genres'].apply(
+            lambda x: x.split('|')[0].strip() if isinstance(x, str) else 
+            (x[0] if isinstance(x, list) and len(x) > 0 else 'Unknown')
+        )
+        color_col = 'primary_genre'
+        if 'genres' in tooltip_cols:
+            tooltip_cols.remove('genres')
+        if 'primary_genre' not in tooltip_cols:
+            tooltip_cols.append('primary_genre')
     elif 'averageScore' in plot_df.columns:
         color_col = 'averageScore'
     

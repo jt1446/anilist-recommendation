@@ -100,14 +100,24 @@ def main():
     
     # Prepare GNN inputs
     print("Preparing GNN inputs...")
-    # Use item index as one-hot features (or metadata features)
-    input_dim = min(num_items, 256)  # Cap at 256 dimensions
-    x = torch.eye(input_dim).to(device)
-    if num_items < input_dim:
-        x = x[:num_items]
+    
+    # Feature Engineering: Use .str.get_dummies(sep='|') to turn genres into features
+    if 'genres' in metadata_df.columns:
+        print("Extracting genre features...")
+        # Get dummies for genres
+        genre_dummies = metadata_df['genres'].str.get_dummies(sep='|')
+        # Convert to tensor
+        x = torch.tensor(genre_dummies.values, dtype=torch.float).to(device)
+        input_dim = x.shape[1]
+        print(f"Created {input_dim} genre-based features.")
     else:
-        # Create random projection for high-dimensional spaces
+        # Fallback if genres not available
+        input_dim = min(num_items, 128)
         x = torch.randn(num_items, input_dim).to(device)
+        print(f"Falling back to random features with dim {input_dim}")
+    
+    # Store node_features in the GNN for later persistence
+    node_features = x.detach().cpu()
     
     # Create simple edge index (connect each item to top co-watched items)
     edge_list = []
