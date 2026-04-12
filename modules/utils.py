@@ -398,7 +398,8 @@ def create_latent_space_map(embeddings, metadata_df):
     tooltip_cols = [col for col in possible_tooltip_cols if col in metadata_df.columns]
     
     print(f"Performing UMAP dimensionality reduction on {embeddings.shape}...")
-    reducer = umap.UMAP(n_neighbors=50, min_dist=0.1, n_components=2, metric='cosine')
+    # Tightened parameters: lower n_neighbors and min_dist for more distinct islands
+    reducer = umap.UMAP(n_neighbors=15, min_dist=0.01, n_components=2, metric='cosine')
     umap_embeddings = reducer.fit_transform(embeddings)
     
     # Create a DataFrame for plotting

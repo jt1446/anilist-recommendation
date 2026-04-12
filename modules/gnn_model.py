@@ -14,17 +14,17 @@ Output:
 '''
 import torch
 import torch.nn.functional as F
-from torch_geometric.nn import GCNConv
+from torch_geometric.nn import SAGEConv
 
 class AnimeGNN(torch.nn.Module):
     def __init__(self, input_dim, hidden_dim=128, output_dim=128):
         super(AnimeGNN, self).__init__()
         # Store initial projection to ensure it's and stored/reusable
         self.node_features = None 
-        # First GCN layer: maps input features to hidden space
-        self.conv1 = GCNConv(input_dim, hidden_dim)
-        # Second GCN layer: produces final latent embeddings
-        self.conv2 = GCNConv(hidden_dim, output_dim)
+        # First GraphSAGE layer: aggregates neighbors using mean/pool
+        self.conv1 = SAGEConv(input_dim, hidden_dim)
+        # Second GraphSAGE layer: produces final latent embeddings
+        self.conv2 = SAGEConv(hidden_dim, output_dim)
 
     def forward(self, x, edge_index):
         """

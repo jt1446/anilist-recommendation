@@ -19,6 +19,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
+from sklearn.preprocessing import StandardScaler
 import sys
 
 from .gnn_model import AnimeGNN
@@ -30,9 +31,10 @@ from .utils import (
 # Training hyperparameters
 EMBEDDING_DIM = 128
 RNN_UNITS = 256
-BATCH_SIZE = 32
-EPOCHS = 10
-LEARNING_RATE = 0.001
+BATCH_SIZE = 1024
+EPOCHS = 50
+LEARNING_RATE = 0.005
+WEIGHT_DECAY = 1e-5
 MAX_SEQ_LEN = 20
 NUM_NEGATIVES = 5
 
@@ -101,17 +103,39 @@ def main():
     # Prepare GNN inputs
     print("Preparing GNN inputs...")
     
-    # Feature Engineering: Use .str.get_dummies(sep='|') to turn genres into features
+    # Feature Engineering: Use .str.get_dummies(sep='|') to turn genres and tags into features
+    feature_parts = []
     if 'genres' in metadata_df.columns:
         print("Extracting genre features...")
-        # Get dummies for genres
         genre_dummies = metadata_df['genres'].str.get_dummies(sep='|')
-        # Convert to tensor
-        x = torch.tensor(genre_dummies.values, dtype=torch.float).to(device)
+        feature_parts.append(genre_dummies)
+        print(f"Added {genre_dummies.shape[1]} genre features.")
+        
+    if 'top_tags' in metadata_df.columns:
+        print("Extracting tag features...")
+        tag_dummies = metadata_df['top_tags'].str.get_dummies(sep='|')
+        feature_parts.append(tag_dummies)
+        print(f"Added {tag_dummies.shape[1]} tag features.")
+
+    # 3. Numeric Features: Popularity and Mean Score
+    numeric_cols = ['popularity', 'meanScore']
+    if all(col in metadata_df.columns for col in numeric_cols):
+        print("Scaling numeric features (popularity, meanScore)...")
+        scaler = StandardScaler()
+        # Handle NaNs if any, though the CSV should be clean
+        scaled_values = scaler.fit_transform(metadata_df[numeric_cols].fillna(0))
+        numeric_features = pd.DataFrame(scaled_values, columns=numeric_cols, index=metadata_df.index)
+        feature_parts.append(numeric_features)
+        print("Added scaled numeric features.")
+
+    if feature_parts:
+        # Concatenate genres, tags, and numeric features
+        combined_features = pd.concat(feature_parts, axis=1)
+        x = torch.tensor(combined_features.values, dtype=torch.float).to(device)
         input_dim = x.shape[1]
-        print(f"Created {input_dim} genre-based features.")
+        print(f"Total input features: {input_dim}")
     else:
-        # Fallback if genres not available
+        # Fallback if no metadata available
         input_dim = min(num_items, 128)
         x = torch.randn(num_items, input_dim).to(device)
         print(f"Falling back to random features with dim {input_dim}")
@@ -197,8 +221,12 @@ def main():
     # Set up optimizer and storage for metrics
     optimizer = optim.Adam(
         list(gnn.parameters()) + list(seq_model.parameters()),
-        lr=LEARNING_RATE
+        lr=LEARNING_RATE,
+        weight_decay=WEIGHT_DECAY
     )
+    
+    # Adaptive Learning Rate Scheduler
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=5)
     
     loss_history = []
     hit_rate_history = []
@@ -225,9 +253,13 @@ def main():
         avg_loss = total_loss / num_batches
         hit_rate = evaluate_hit_rate(gnn, seq_model, test_loader, x, edge_index, device, k=10)
         
+        # Step the scheduler based on Hit@10
+        scheduler.step(hit_rate)
+        
         loss_history.append(avg_loss)
         hit_rate_history.append(hit_rate)
         
+        # Hit rate is already in percentage format from the utility function
         print(f"Epoch {epoch+1}/{EPOCHS} | Loss: {avg_loss:.4f} | Hit@10: {hit_rate:.2f}%")
     
     # Save trained models
