@@ -16,11 +16,12 @@ import torch
 import torch.nn.functional as F
 from torch_geometric.nn import SAGEConv
 
-class AnimeGNN(torch.nn.Module):
-    def __init__(self, input_dim, hidden_dim=128, output_dim=128):
-        super(AnimeGNN, self).__init__()
+class GNNEncoder(torch.nn.Module):
+    def __init__(self, input_dim, hidden_dim=128, output_dim=128, dropout=0.2):
+        super(GNNEncoder, self).__init__()
         # Store initial projection to ensure it's and stored/reusable
-        self.node_features = None 
+        self.node_features = None
+        self.dropout_p = dropout
         # First GraphSAGE layer: aggregates neighbors using mean/pool
         self.conv1 = SAGEConv(input_dim, hidden_dim)
         # Second GraphSAGE layer: produces final latent embeddings
@@ -37,12 +38,20 @@ class AnimeGNN(torch.nn.Module):
         # First Layer + ReLU
         x = self.conv1(x, edge_index)
         x = F.relu(x)
-        x = F.dropout(x, p=0.2, training=self.training)
+        x = F.dropout(x, p=self.dropout_p, training=self.training)
 
         # Second Layer
         z = self.conv2(x, edge_index)
+        z = F.dropout(z, p=self.dropout_p, training=self.training)
 
         return z
+
+def get_spatial_embeddings(model, feature_matrix, edge_index):
+    """The forward pass that generates the latest latent vectors for all anime based on current graph structure."""
+    model.eval()
+    with torch.no_grad():
+        embeddings = model(feature_matrix, edge_index)
+    return embeddings
 
 # Example Usage (Placeholder for your specific tensors):
 # model = AnimeGNN(input_dim=node_features.shape[1])
