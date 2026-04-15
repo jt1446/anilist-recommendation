@@ -17,28 +17,28 @@ Making a recommendation algorithm that takes a user's lists and outputs recommen
 - [x] write util functions
 - [ ] data engineering
     - [x] get data
-    - [ ] convert into vectors
-    - [ ] make tensors
-    - [ ] produce fully cleaned data that can be imported
+    - [x] convert into vectors
+    - [x] make tensors
+    - [x] produce fully cleaned data that can be imported
 
-- [ ] loss/integration
-    - [ ] BPR Loss
-    - [ ] evaluation script
-    - [ ] training loop script
+- [x] loss/integration
+    - [x] BPR Loss
+    - [x] evaluation script (Metrics: Hit@10: 0.07, MRR: 0.02)
+    - [x] training loop script
 
-- [ ] gnn
-    - [ ] build the graph
-    - [ ] create gnn layer
-    - [ ] write function to return latent vector for any anime
-- [ ] seq model
+- [x] gnn
+    - [x] build the graph
+    - [x] create gnn layer
+    - [x] write function to return latent vector for any anime
+- [x] seq model
     - build rnn/attention layer with the input being a sequence of 128 dimension embeds from gnn
     - output is probability distribution of all anime (next recommendation)
 
-- [ ] visualization
-    - [ ] build streamlit interface
-    - [ ] implement graph viz with PyVis
-    - [ ] take the output of the GNN embeddings and create an interactive "Galaxy" of anime where users can click to see clusters
-    - [ ] Visualize the "Loss Convergence" curve by reading the training logs
+- [x] visualization
+    - [x] build streamlit interface
+    - [x] implement graph viz with Plotly/UMAP (replacing PyVis for better performance)
+    - [x] take the output of the GNN embeddings and create an interactive "Galaxy" of anime where users can click to see clusters
+    - [x] Visualize the "Loss Convergence" curve by reading the training logs
 
 ### Features: 
 - Uses GNN
