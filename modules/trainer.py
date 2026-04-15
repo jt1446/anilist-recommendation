@@ -256,8 +256,9 @@ def main():
     best_val_hit_rate = 0.0
     best_metrics = (0.0, 0.0, 0.0)
 
-    scaler = torch.cuda.amp.GradScaler(enabled=(device.type == 'cuda'))
-
+    #scaler = torch.cuda.amp.GradScaler(enabled=(device.type == 'cuda')) updated line to fix warning
+    scaler = torch.amp.GradScaler('cuda', enabled=(device.type == 'cuda'))
+    
     for epoch in range(1, epochs + 1):
         rnn.train()
         total_loss = 0.0
@@ -272,7 +273,8 @@ def main():
             seq_embeddings = all_embeddings[item_seq_indices]
 
             # Forward RNN to get logits for all items
-            with torch.cuda.amp.autocast(enabled=(device.type == 'cuda')):
+            # with torch.cuda.amp.autocast(enabled=(device.type == 'cuda')): updated line to fix warning 
+            with torch.amp.autocast('cuda', enabled=(device.type == 'cuda')):
                 logits = rnn(seq_embeddings)
                 loss = criterion(logits, targets)
 
