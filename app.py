@@ -1,5 +1,5 @@
 import os
-
+import copy
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -15,15 +15,14 @@ from modules.utils import (
 )
 from modules.visualizer import create_latent_space_map
 
+# Constants
 DATA_DIR = 'data'
 CHECKPOINT_PATH = 'trained_weights.pth'
 SEQ_LEN = 15
 TOP_K = 10
 
-
 def format_title(title):
     return title if isinstance(title, str) else str(title)
-
 
 @st.cache_data
 def load_data():
@@ -32,7 +31,6 @@ def load_data():
     edge_index, user_id_to_idx = create_interaction_graph(
         os.path.join(DATA_DIR, 'interactions.csv'), anime_id_to_idx
     )
-
     metadata_by_id = {
         int(row['mediaId']): {
             'title': row['title'],
@@ -41,9 +39,7 @@ def load_data():
         }
         for _, row in metadata_df.iterrows()
     }
-
     return metadata_df, interactions_df, features, anime_id_to_idx, edge_index, user_id_to_idx, metadata_by_id
-
 
 @st.cache_resource
 def load_model_components(device, num_items, input_dim, hidden_dim, num_users):
@@ -55,6 +51,10 @@ def load_model_components(device, num_items, input_dim, hidden_dim, num_users):
     rnn.eval()
     return gnn, rnn, user_embedding
 
+@st.cache_data
+def get_base_map(_item_embeddings, _metadata_df):
+    """Caches the heavy UMAP/Plotly computation for the Galaxy Map."""
+    return create_latent_space_map(_item_embeddings, _metadata_df)
 
 def get_user_history(user_id, interactions_df, metadata_by_id):
     user_df = interactions_df[interactions_df['userId'] == user_id].sort_values('updatedAt')
@@ -62,19 +62,16 @@ def get_user_history(user_id, interactions_df, metadata_by_id):
     for _, row in user_df.iterrows():
         media_id = int(row['mediaId'])
         info = metadata_by_id.get(media_id, {})
-        history.append(
-            {
-                'mediaId': media_id,
-                'title': format_title(info.get('title', str(media_id))),
-                'genres': info.get('genres', ''),
-                'primary_genre': info.get('primary_genre', ''),
-                'updatedAt': row['updatedAt'],
-            }
-        )
+        history.append({
+            'mediaId': media_id,
+            'title': format_title(info.get('title', str(media_id))),
+            'genres': info.get('genres', ''),
+            'primary_genre': info.get('primary_genre', ''),
+            'updatedAt': row['updatedAt'],
+        })
     return history
 
-
-def build_recommendations(rnn, item_embeddings, sequence_indices, sequence_item_indices, idx_to_media_id, metadata_by_id, top_k=10):
+def build_recommendations(rnn, sequence_indices, sequence_item_indices, idx_to_media_id, metadata_by_id, top_k=10):
     with torch.no_grad():
         logits, attention = rnn(sequence_indices, return_attention=True)
         logits = logits[0]
@@ -88,137 +85,122 @@ def build_recommendations(rnn, item_embeddings, sequence_indices, sequence_item_
             continue
         media_id = idx_to_media_id[item_idx]
         info = metadata_by_id.get(media_id, {})
-        recs.append(
-            {
-                'mediaId': media_id,
-                'title': format_title(info.get('title', str(media_id))),
-                'primary_genre': info.get('primary_genre', ''),
-                'genres': info.get('genres', ''),
-                'score': float(logits[item_idx].cpu().item()),
-            }
-        )
+        recs.append({
+            'mediaId': media_id,
+            'title': format_title(info.get('title', str(media_id))),
+            'primary_genre': info.get('primary_genre', ''),
+            'genres': info.get('genres', ''),
+            'score': float(logits[item_idx].cpu().item()),
+        })
         if len(recs) >= top_k:
             break
-
-    attention_weights = attention[0].cpu().tolist()
-    return recs, attention_weights
-
+    return recs, attention[0].cpu().tolist()
 
 def highlight_latent_points(fig, history_indices, recommendation_indices):
-    if len(fig.data) == 0:
-        return fig
-    x = list(fig.data[0].x)
-    y = list(fig.data[0].y)
+    fig_copy = copy.deepcopy(fig)
+    if len(fig_copy.data) == 0:
+        return fig_copy
+    
+    x, y = list(fig_copy.data[0].x), list(fig_copy.data[0].y)
+    
+    valid_hist = [i for i in history_indices if 0 <= i < len(x)]
+    valid_recs = [i for i in recommendation_indices if 0 <= i < len(x)]
 
-    valid_history_indices = [i for i in history_indices if 0 <= i < len(x)]
-    valid_recommendation_indices = [i for i in recommendation_indices if 0 <= i < len(x)]
-
-    if valid_history_indices:
-        fig.add_trace(
-            go.Scatter(
-                x=[x[i] for i in valid_history_indices],
-                y=[y[i] for i in valid_history_indices],
-                mode='markers',
-                marker=dict(size=12, color='black', symbol='x'),
-                name='History',
-                showlegend=True,
-            )
-        )
-
-    if valid_recommendation_indices:
-        fig.add_trace(
-            go.Scatter(
-                x=[x[i] for i in valid_recommendation_indices],
-                y=[y[i] for i in valid_recommendation_indices],
-                mode='markers',
-                marker=dict(size=12, color='red', symbol='star'),
-                name='Recommendations',
-                showlegend=True,
-            )
-        )
-
-    return fig
-
+    if valid_hist:
+        fig_copy.add_trace(go.Scatter(
+            x=[x[i] for i in valid_hist], y=[y[i] for i in valid_hist],
+            mode='markers', marker=dict(size=14, color='white', symbol='circle', line=dict(width=2, color='black')),
+            name='User History'
+        ))
+    if valid_recs:
+        fig_copy.add_trace(go.Scatter(
+            x=[x[i] for i in valid_recs], y=[y[i] for i in valid_recs],
+            mode='markers', marker=dict(size=16, color='red', symbol='star'),
+            name='Top Recommendations'
+        ))
+    return fig_copy
 
 def main():
-    st.set_page_config(page_title='AniList Recommendation Demo', layout='wide')
-    st.title('AniList Recommendation Demo')
-    st.write(
-        'Select a user, review their recent history, and inspect next-item recommendations with a latent space galaxy view.'
-    )
+    st.set_page_config(page_title='AniRecc: The Anime Galaxy', layout='wide', initial_sidebar_state="expanded")
+    
+    # Custom CSS for a cleaner look
+    st.markdown("""<style> .main { background-color: #0e1117; } stMetric { background-color: #161b22; border-radius: 10px; padding: 10px; } </style>""", unsafe_allow_html=True)
+
+    st.title('🌌 AniRecc: Deep Learning Anime Galaxy')
+    st.sidebar.header("User Selection")
 
     if not os.path.exists(CHECKPOINT_PATH):
-        st.error(f'Checkpoint not found at `{CHECKPOINT_PATH}`. Run training first.')
+        st.error(f'Checkpoint missing: `{CHECKPOINT_PATH}`. Please upload model weights.')
         return
 
+    # Load Data
     metadata_df, interactions_df, features, anime_id_to_idx, edge_index, user_id_to_idx, metadata_by_id = load_data()
     device = get_device()
-    num_users = len(user_id_to_idx)
-    num_items = features.shape[0]
-    input_dim = features.shape[1]
-    hidden_dim = 128
+    num_users, num_items = len(user_id_to_idx), features.shape[0]
+    input_dim, hidden_dim = features.shape[1], 128
 
+    # Load Model
     gnn, rnn, user_embedding = load_model_components(device, num_items, input_dim, hidden_dim, num_users)
 
+    # Sidebar interactions
     user_ids = sorted(interactions_df['userId'].unique().tolist())
-    selected_user = st.selectbox('Select User ID', user_ids)
+    selected_user = st.sidebar.selectbox('Choose a User ID to simulate:', user_ids)
 
-    if selected_user is None:
-        return
+    if selected_user:
+        history = get_user_history(selected_user, interactions_df, metadata_by_id)
+        recent_history = pd.DataFrame(history).tail(SEQ_LEN)
+        
+        col1, col2 = st.columns([1, 1])
 
-    history = get_user_history(selected_user, interactions_df, metadata_by_id)
-    if not history:
-        st.warning('No history found for this user.')
-        return
+        with col1:
+            st.subheader("📜 Recent Watch History")
+            st.dataframe(recent_history[['title', 'primary_genre']].rename(columns={'title': 'Anime', 'primary_genre': 'Genre'}), use_container_width=True)
 
-    history_df = pd.DataFrame(history)
-    recent_history = history_df.tail(SEQ_LEN)
-    st.subheader('Recent Watch History')
-    st.table(recent_history[['mediaId', 'title', 'primary_genre', 'genres']].rename(columns={'mediaId': 'Media ID'}))
+        # Inference logic
+        seq_indices = [anime_id_to_idx[mid] for mid in recent_history['mediaId'] if mid in anime_id_to_idx]
+        if seq_indices:
+            with torch.no_grad():
+                full_features = torch.cat([user_embedding.weight, features.to(device)], dim=0)
+                item_embeddings = gnn(full_features, edge_index.to(device))[num_users:]
+            
+            sequence_tensor = torch.tensor(seq_indices, dtype=torch.long, device=device).unsqueeze(0)
+            sequence_embeddings = item_embeddings[sequence_tensor]
 
-    seq_indices = [anime_id_to_idx[mid] for mid in recent_history['mediaId'] if mid in anime_id_to_idx]
-    if len(seq_indices) == 0:
-        st.warning('No valid history items available for prediction.')
-        return
+            recs, attention_weights = build_recommendations(
+                rnn, sequence_embeddings, sequence_tensor,
+                {idx: mid for mid, idx in anime_id_to_idx.items()},
+                metadata_by_id, top_k=5
+            )
 
-    item_embeddings = None
-    with torch.no_grad():
-        full_features = torch.cat([user_embedding.weight, features.to(device)], dim=0)
-        all_embeddings = gnn(full_features, edge_index.to(device))
-        item_embeddings = all_embeddings[num_users:]
+            with col2:
+                st.subheader("🚀 Predicted Next Watch")
+                rec_cols = st.columns(len(recs))
+                for i, rec in enumerate(recs):
+                    with rec_cols[i]:
+                        st.metric(label=f"Rank {i+1}", value=rec['title'][:15]+"...", delta=f"{rec['score']:.2f} score")
+                        st.caption(f"Genre: {rec['primary_genre']}")
 
-    sequence_tensor = torch.tensor(seq_indices, dtype=torch.long, device=device).unsqueeze(0)
-    sequence_embeddings = item_embeddings[sequence_tensor]
+            # Attention Chart
+            st.markdown("---")
+            st.subheader("🧠 Explainability: Why these picks?")
+            st.info("The Attention mechanism analyzes the user's history. Higher bars indicate which shows 'triggered' the current recommendation.")
+            attn_df = pd.DataFrame({'Anime': recent_history['title'].tolist(), 'Influence': attention_weights[:len(recent_history)]})
+            st.bar_chart(attn_df.set_index('Anime'))
 
-    recs, attention_weights = build_recommendations(
-        rnn,
-        item_embeddings,
-        sequence_embeddings,
-        sequence_tensor,
-        {idx: media_id for media_id, idx in anime_id_to_idx.items()},
-        metadata_by_id,
-        top_k=TOP_K,
-    )
+            # Galaxy Map
+            st.subheader("🌌 The Anime Galaxy (Latent Space Visualization)")
+            st.write("Each dot is an anime. Distance represents similarity in themes and watching patterns.")
+            base_fig = get_base_map(item_embeddings.cpu(), metadata_df)
+            final_fig = highlight_latent_points(base_fig, seq_indices, [anime_id_to_idx[r['mediaId']] for r in recs])
+            st.plotly_chart(final_fig, use_container_width=True)
 
-    st.subheader('Top Recommendations')
-    st.table(pd.DataFrame(recs))
-
-    st.subheader('Why? Attention weights for history')
-    attention_df = pd.DataFrame(
-        {
-            'title': recent_history['title'].tolist(),
-            'attention': attention_weights[: len(recent_history)],
-        }
-    )
-    st.bar_chart(attention_df.set_index('title'))
-
-    st.subheader('The Galaxy Map')
-    fig = create_latent_space_map(item_embeddings.cpu(), metadata_df)
-    history_item_indices = [anime_id_to_idx[mid] for mid in recent_history['mediaId'] if mid in anime_id_to_idx]
-    recommendation_item_indices = [anime_id_to_idx[rec['mediaId']] for rec in recs if rec['mediaId'] in anime_id_to_idx]
-    fig = highlight_latent_points(fig, history_item_indices, recommendation_item_indices)
-    st.plotly_chart(fig, use_container_width=True)
-
+    # Technical Expander for Professor
+    with st.expander("🛠 Technical Architecture"):
+        st.write("""
+        **1. GNN Encoder:** Aggregates user-anime interactions to create 128-dim latent embeddings.
+        **2. Attention RNN:** Processes the sequence of embeddings to predict the next temporal interaction.
+        **3. BPR Loss:** Optimized using Bayesian Personalized Ranking for high-quality recommendation lists.
+        """)
 
 if __name__ == '__main__':
     main()
