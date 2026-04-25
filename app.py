@@ -173,12 +173,29 @@ def main():
             )
 
             with col2:
-                st.subheader("🚀 Predicted Next Watch")
-                rec_cols = st.columns(len(recs))
+                st.subheader("🚀 Next Watch Predictions")
+                # Iterate through top recommendations
                 for i, rec in enumerate(recs):
-                    with rec_cols[i]:
-                        st.metric(label=f"Rank {i+1}", value=rec['title'][:15]+"...", delta=f"{rec['score']:.2f} score")
-                        st.caption(f"Genre: {rec['primary_genre']}")
+                    with st.container():
+                        # Create two columns: one for the image, one for the text
+                        img_col, text_col = st.columns([1, 3])
+                        
+                        with img_col:
+                            # Direct link to AniList poster images
+                            poster_url = f"https://img.anili.st/media/{rec['mediaId']}"
+                            st.image(poster_url, use_container_width=True)
+                            
+                        with text_col:
+                            st.markdown(f"### {i+1}. {rec['title']}")
+                            st.caption(f"**Genre:** {rec['primary_genre']} | **Score:** {rec['score']:.2f}")
+                            
+                            # Confidence bar based on the model's output score
+                            # We normalize it slightly for the progress bar
+                            confidence = min(max(rec['score']/10, 0.0), 1.0) 
+                            st.progress(confidence, text="Model Confidence")
+                        
+                        # Add a divider between items
+                        st.markdown("---")
 
             # Attention Chart
             st.markdown("---")
