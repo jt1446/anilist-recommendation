@@ -10,6 +10,7 @@ tensorboard>=2.13.0
 
 # Data handling
 python-dateutil>=2.8.2
+requests>=2.31.0
 
 # Visualization & Latent Space Mapping
 plotly>=5.15.0

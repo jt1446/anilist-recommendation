@@ -13,6 +13,7 @@ from modules.utils import (
     load_processed_data,
     load_recommendation_checkpoint,
 )
+from modules.anilist_api import fetch_anilist_user_history
 from modules.visualizer import create_latent_space_map
 
 # Constants
@@ -55,6 +56,11 @@ def load_model_components(device, num_items, input_dim, hidden_dim, num_users):
 def get_base_map(_item_embeddings, _metadata_df):
     """Caches the heavy UMAP/Plotly computation for the Galaxy Map."""
     return create_latent_space_map(_item_embeddings, _metadata_df)
+
+
+def filter_history_to_dataset(history, anime_id_to_idx):
+    return [entry for entry in history if entry['mediaId'] in anime_id_to_idx]
+
 
 def get_user_history(user_id, interactions_df, metadata_by_id):
     user_df = interactions_df[interactions_df['userId'] == user_id].sort_values('updatedAt')
@@ -144,16 +150,59 @@ def main():
 
     # Sidebar interactions
     user_ids = sorted(interactions_df['userId'].unique().tolist())
+    with st.sidebar.form(key='username_form'):
+        username_input = st.text_input(
+            'AniList Username',
+            help='Enter your AniList username to fetch live recommendations based on your completed watch history.'
+        )
+        submit_username = st.form_submit_button('Load AniList History')
+
     selected_user = st.sidebar.selectbox('Choose a User ID to simulate:', user_ids)
 
-    if selected_user:
+    live_history = None
+    resolved_username = None
+    missing_entries = 0
+    use_live_history = False
+
+    if submit_username:
+        username_input = username_input.strip()
+        if username_input:
+            try:
+                raw_history, resolved_username = fetch_anilist_user_history(username_input)
+                filtered_history = filter_history_to_dataset(raw_history, anime_id_to_idx)
+                missing_entries = len(raw_history) - len(filtered_history)
+
+                if filtered_history:
+                    live_history = filtered_history
+                    use_live_history = True
+                    st.sidebar.success(f'Loaded AniList user: {resolved_username}')
+                    if missing_entries > 0:
+                        st.sidebar.info(
+                            f'{missing_entries} completed anime entries were not in the current item catalog and were ignored.'
+                        )
+                else:
+                    st.sidebar.error(
+                        'No completed anime entries from this AniList profile were found in the current item catalog.'
+                    )
+            except ValueError as err:
+                st.sidebar.error(str(err))
+        else:
+            st.sidebar.warning('Please enter an AniList username.')
+
+    if use_live_history:
+        history = live_history
+        user_label = f'AniList user: {resolved_username}'
+    else:
         history = get_user_history(selected_user, interactions_df, metadata_by_id)
+        user_label = f'Local dataset user: {selected_user}'
+
+    if history:
         recent_history = pd.DataFrame(history).tail(SEQ_LEN)
         
         col1, col2 = st.columns([1, 1])
 
         with col1:
-            st.subheader("📜 Recent Watch History")
+            st.subheader(f"📜 Recent Watch History — {user_label}")
             st.dataframe(recent_history[['title', 'primary_genre']].rename(columns={'title': 'Anime', 'primary_genre': 'Genre'}), use_container_width=True)
 
         # Inference logic
